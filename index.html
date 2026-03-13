@@ -155,7 +155,7 @@
   .event-group.past { opacity: 0.45; }
   .event-row {
     display: grid;
-    grid-template-columns: 90px 1fr auto 70px;
+    grid-template-columns: 90px 1fr auto auto 70px;
     align-items: center;
     padding: 8px 16px;
     gap: 12px;
@@ -289,6 +289,20 @@
   .moon-europa { color: #7ec8e3; }
   .moon-ganymede { color: #b8e87b; }
   .moon-callisto { color: #c8a0e8; }
+  .refine-btn {
+    background: none;
+    border: 1px solid #2a2f45;
+    color: #7ec8e3;
+    font-size: 0.65em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .refine-btn:hover { background: #1a2040; border-color: #7ec8e3; }
+  .refine-btn:disabled { color: #556; border-color: #1a1f35; cursor: default; }
+  .refine-btn.refined { color: #7be87b; border-color: #7be87b; }
 </style>
 </head>
 <body>
@@ -1377,7 +1391,7 @@ function render() {
       const label = ev.moonName + ' ' + typeLabels[ev.type] + ' ' + (ev.ingress ? 'Start' : 'End');
       const css = 'moon-' + ev.type;
 
-      allEvents.push({ kind: 'moon', type: ev.type, label, time: ev.time, css, cls: ev.cls, groupEnd: ev.time });
+      allEvents.push({ kind: 'moon', type: ev.type, label, time: ev.time, css, cls: ev.cls, groupEnd: ev.time, moonIdx: ev.moon, ingress: ev.ingress });
     });
   }
 
@@ -1415,6 +1429,19 @@ function render() {
 
     row.appendChild(typeSpan);
     row.appendChild(dtSpan);
+
+    if (ev.kind === 'moon') {
+      const refBtn = document.createElement('button');
+      refBtn.className = 'refine-btn';
+      refBtn.textContent = 'JPL';
+      refBtn.title = 'Refine time via JPL Horizons';
+      refBtn.onclick = () => refineEventTime(refBtn, ev.moonIdx, ev.type, ev.ingress, ev.time);
+      row.appendChild(refBtn);
+    } else {
+      const spacer = document.createElement('span');
+      row.appendChild(spacer);
+    }
+
     row.appendChild(aaSpan);
     row.appendChild(cdSpan);
     container.appendChild(row);
@@ -1422,6 +1449,180 @@ function render() {
 
   // Update moon diagram
   renderMoonDiagram();
+}
+
+// ============================================================
+//  JPL Horizons event refinement
+// ============================================================
+const HORIZONS_IDS = ['501', '502', '503', '504']; // Io, Europa, Ganymede, Callisto
+
+async function refineEventTime(btn, moonIdx, eventType, ingress, predictedTime) {
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    // Query window: ±2 hours around predicted time, 1-minute steps
+    const t = predictedTime;
+    const startTime = new Date(t.getTime() - 2 * 3600000);
+    const endTime = new Date(t.getTime() + 2 * 3600000);
+    const fmtTime = d => {
+      const y = d.getUTCFullYear();
+      const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+      const day = d.getUTCDate();
+      const hh = String(d.getUTCHours()).padStart(2,'0');
+      const mm = String(d.getUTCMinutes()).padStart(2,'0');
+      return encodeURIComponent("'" + y + '-' + mon + '-' + day + ' ' + hh + ':' + mm + "'");
+    };
+
+    // Fetch satellite positions and Jupiter angular size
+    const satId = HORIZONS_IDS[moonIdx];
+    const q = encodeURIComponent;
+    const baseUrl = 'https://ssd.jpl.nasa.gov/api/horizons.api?format=text';
+    const common = '&OBJ_DATA=NO&MAKE_EPHEM=YES&TABLE_TYPE=OBSERVER&CSV_FORMAT=YES&EXTRA_PREC=YES';
+    const timeParams = '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(endTime) + '&STEP_SIZE=' + q('1 min');
+
+    // Fetch satellite X,Y (quantity 6) and Jupiter angular diameter (quantity 13 on Jupiter)
+    const satUrl = baseUrl + '&COMMAND=' + q("'" + satId + "'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'6'") + timeParams;
+    const jupEnd = new Date(startTime.getTime() + 60000);
+    const jupUrl = baseUrl + '&COMMAND=' + q("'599'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'13'") + '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(jupEnd) + '&STEP_SIZE=' + q('1 min');
+
+    // Try direct fetch; if CORS blocks it, try via corsproxy.io
+    async function fetchHorizons(url) {
+      try {
+        const resp = await fetch(url);
+        if (resp.ok) return await resp.text();
+      } catch (e) { /* CORS or network error, try proxy */ }
+      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+      const resp = await fetch(proxyUrl);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return await resp.text();
+    }
+
+    const [satText, jupText] = await Promise.all([fetchHorizons(satUrl), fetchHorizons(jupUrl)]);
+
+    // Parse Jupiter angular radius
+    const jupMatch = jupText.match(/\$\$SOE\s*\n([\s\S]*?)\n\$\$EOE/);
+    if (!jupMatch) throw new Error('No Jupiter data');
+    const jupCols = jupMatch[1].trim().split(',').map(s => s.trim()).filter(s => s);
+    const jupAngDiam = parseFloat(jupCols[jupCols.length - 1]); // ang-diam column
+    const jupAngRadius = jupAngDiam / 2; // arcseconds
+
+    // Parse satellite positions
+    const satMatch = satText.match(/\$\$SOE\s*\n([\s\S]*?)\n\$\$EOE/);
+    if (!satMatch) throw new Error('No satellite data');
+    const lines = satMatch[1].trim().split('\n');
+
+    const dataPoints = [];
+    for (const line of lines) {
+      const parts = line.split(',');
+      if (parts.length < 5) continue;
+      const dateStr = parts[0].trim();
+      const satX = parseFloat(parts[3]); // arcseconds
+      const satY = parseFloat(parts[4]);
+      if (isNaN(satX) || isNaN(satY)) continue;
+      // Parse date: "2026-Mar-13 10:48"
+      const dm = dateStr.match(/(\d{4})-(\w{3})-(\d+)\s+(\d+):(\d+)/);
+      if (!dm) continue;
+      const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+      const dt = new Date(Date.UTC(+dm[1], months[dm[2]], +dm[3], +dm[4], +dm[5]));
+      dataPoints.push({ time: dt, x: satX, y: satY });
+    }
+
+    if (dataPoints.length < 3) throw new Error('Insufficient data');
+
+    // Find the crossing based on event type
+    let refinedTime = null;
+
+    if (eventType === 'transit' || eventType === 'occultation') {
+      // Find when apparent distance from Jupiter center crosses jupAngRadius
+      // For transit/occultation, the key is the limb crossing
+      // Use |X| crossing jupAngRadius (since Y is small for these equatorial moons)
+      const threshold = jupAngRadius;
+      for (let i = 1; i < dataPoints.length; i++) {
+        const prev = dataPoints[i-1], curr = dataPoints[i];
+        const prevAbsX = Math.abs(prev.x), currAbsX = Math.abs(curr.x);
+        const prevD = prevAbsX - threshold, currD = currAbsX - threshold;
+        // Ingress: |X| decreasing through threshold; Egress: |X| increasing through threshold
+        if (prevD * currD < 0) {
+          const isMovingIn = currAbsX < prevAbsX;
+          if (isMovingIn === ingress) {
+            // Linear interpolation
+            const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
+            const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
+            refinedTime = new Date(tMs);
+            break;
+          }
+        }
+      }
+    } else if (eventType === 'shadow') {
+      // Shadow transit: the shadow position is offset from the moon by the phase angle
+      // Find when the shadow crosses the limb
+      // Shadow offset ≈ satellite X - (angular_semi_major_axis * sin(phase_angle))
+      // For a simpler approach: look for when the satellite X is near ±jupAngRadius
+      // but shifted by the shadow offset. Use a slightly larger/smaller threshold.
+      // The phase angle shifts shadows west; approximate shift from our model
+      const pos0 = galileanMoonPositions(predictedTime);
+      const shadowShiftJR = MOON_A[moonIdx] * Math.sin(pos0.phaseAngle) * 0.9;
+      const shadowShiftAS = shadowShiftJR * jupAngRadius; // convert to arcseconds approx
+
+      const threshold = jupAngRadius;
+      for (let i = 1; i < dataPoints.length; i++) {
+        const prev = dataPoints[i-1], curr = dataPoints[i];
+        // Shadow X ≈ satellite X - shadowShift (Horizons X is RA-positive=east, our shift is west-positive)
+        const prevShadowAbsX = Math.abs(prev.x + shadowShiftAS);
+        const currShadowAbsX = Math.abs(curr.x + shadowShiftAS);
+        const prevD = prevShadowAbsX - threshold, currD = currShadowAbsX - threshold;
+        if (prevD * currD < 0) {
+          const isMovingIn = currShadowAbsX < prevShadowAbsX;
+          if (isMovingIn === ingress) {
+            const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
+            const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
+            refinedTime = new Date(tMs);
+            break;
+          }
+        }
+      }
+    } else if (eventType === 'eclipse') {
+      // Eclipse: moon enters Jupiter's shadow cone behind the planet
+      // Look for when the moon disappears/reappears near the shadow edge
+      // Approximate: find when |X - shadowOffset| crosses jupAngRadius while moon is behind Jupiter
+      const pos0 = galileanMoonPositions(predictedTime);
+      const shadowShiftAS = MOON_A[moonIdx] * Math.sin(pos0.phaseAngle) * 0.9 * jupAngRadius;
+
+      const threshold = jupAngRadius;
+      for (let i = 1; i < dataPoints.length; i++) {
+        const prev = dataPoints[i-1], curr = dataPoints[i];
+        const prevSX = Math.abs(prev.x - shadowShiftAS);
+        const currSX = Math.abs(curr.x - shadowShiftAS);
+        const prevD = prevSX - threshold, currD = currSX - threshold;
+        if (prevD * currD < 0) {
+          const isMovingIn = currSX < prevSX;
+          if (isMovingIn === ingress) {
+            const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
+            const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
+            refinedTime = new Date(tMs);
+            break;
+          }
+        }
+      }
+    }
+
+    if (!refinedTime) throw new Error('Crossing not found');
+
+    // Update the display
+    const tz = document.getElementById('tzSelect').value;
+    const dtSpan = btn.closest('.event-row').querySelector('.event-datetime');
+    dtSpan.innerHTML = '<span class="event-date">' + formatDate(refinedTime, tz) +
+      '</span> <span class="event-time">' + formatTime(refinedTime, tz) + '</span>';
+
+    btn.textContent = 'JPL ✓';
+    btn.className = 'refine-btn refined';
+    btn.title = 'Refined via JPL Horizons (was ' + formatTime(predictedTime, tz) + ')';
+  } catch (e) {
+    btn.textContent = 'err';
+    btn.title = 'Refinement failed: ' + e.message;
+    console.error('Horizons refinement failed:', e);
+  }
 }
 
 // ============================================================

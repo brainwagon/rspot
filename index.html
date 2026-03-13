@@ -1471,20 +1471,20 @@ async function refineEventTime(btn, moonIdx, eventType, ingress, predictedTime) 
       const day = d.getUTCDate();
       const hh = String(d.getUTCHours()).padStart(2,'0');
       const mm = String(d.getUTCMinutes()).padStart(2,'0');
-      return encodeURIComponent("'" + y + '-' + mon + '-' + day + ' ' + hh + ':' + mm + "'");
+      return '%27' + y + '-' + mon + '-' + day + '%20' + hh + '%3A' + mm + '%27';
     };
 
     // Fetch satellite positions and Jupiter angular size
     const satId = HORIZONS_IDS[moonIdx];
-    const q = encodeURIComponent;
+    const q = s => encodeURIComponent(s).replace(/'/g, '%27');
     const baseUrl = 'https://ssd.jpl.nasa.gov/api/horizons.api?format=text';
     const common = '&OBJ_DATA=NO&MAKE_EPHEM=YES&TABLE_TYPE=OBSERVER&CSV_FORMAT=YES&EXTRA_PREC=YES';
-    const timeParams = '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(endTime) + '&STEP_SIZE=' + q('1 min');
+    const timeParams = '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(endTime) + '&STEP_SIZE=' + q("'1 min'");
 
     // Fetch satellite X,Y (quantity 6) and Jupiter angular diameter (quantity 13 on Jupiter)
     const satUrl = baseUrl + '&COMMAND=' + q("'" + satId + "'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'6'") + timeParams;
     const jupEnd = new Date(startTime.getTime() + 60000);
-    const jupUrl = baseUrl + '&COMMAND=' + q("'599'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'13'") + '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(jupEnd) + '&STEP_SIZE=' + q('1 min');
+    const jupUrl = baseUrl + '&COMMAND=' + q("'599'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'13'") + '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(jupEnd) + '&STEP_SIZE=' + q("'1 min'");
 
     // Try direct fetch; if CORS blocks it, try via corsproxy.io
     async function fetchHorizons(url) {

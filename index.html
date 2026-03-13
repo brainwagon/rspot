@@ -205,9 +205,7 @@
   }
   /* Moon diagram */
   .moon-diagram {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid #2a2f45;
+    margin-bottom: 10px;
     position: relative;
     height: 70px;
   }
@@ -295,6 +293,15 @@
        title="Jupiter full disk with Great Red Spot - NASA/Voyager 1 (Jan 9, 1979)">
 </div>
 
+<div class="now-bar">
+  <div class="moon-diagram" id="moonDiagram"></div>
+  <div class="cm-label">Current System II Central Meridian</div>
+  <div class="cm-value" id="cmNow">---</div>
+  <div class="grs-status" id="grsStatus">---</div>
+  <div class="jup-altaz" id="jupAltAz"></div>
+  <div class="countdown-section" id="countdownSection"></div>
+</div>
+
 <div class="controls">
   <div class="control-group">
     <label>GRS Longitude (Sys II)</label>
@@ -351,14 +358,6 @@
 
 <div class="sync-status" id="syncStatus"></div>
 
-<div class="now-bar">
-  <div class="cm-label">Current System II Central Meridian</div>
-  <div class="cm-value" id="cmNow">---</div>
-  <div class="grs-status" id="grsStatus">---</div>
-  <div class="jup-altaz" id="jupAltAz"></div>
-  <div class="moon-diagram" id="moonDiagram"></div>
-  <div class="countdown-section" id="countdownSection"></div>
-</div>
 
 <div class="section-label" id="eventsLabel">Upcoming events</div>
 <div class="events" id="eventList"></div>

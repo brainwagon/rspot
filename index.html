@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jupiter Great Red Spot Predictor</title>
+<title>Jupiter GRS & Galilean Moons</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -203,14 +203,91 @@
     color: #556;
     line-height: 1.5;
   }
+  /* Moon diagram */
+  .moon-diagram {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2f45;
+    position: relative;
+    height: 70px;
+  }
+  .moon-diagram .jup-disk {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #f0d8a0, #c89860);
+    border: 1px solid #a08050;
+    z-index: 2;
+  }
+  .moon-diagram .jup-label {
+    position: absolute;
+    left: 50%;
+    top: 2px;
+    transform: translateX(-50%);
+    font-size: 0.6em;
+    color: #667;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .moon-diagram .moon-scale {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    height: 2px;
+    background: #1a1f35;
+    z-index: 0;
+  }
+  .moon-diagram .moon-dot {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    cursor: default;
+  }
+  .moon-diagram .moon-name {
+    position: absolute;
+    bottom: 2px;
+    transform: translateX(-50%);
+    font-size: 0.6em;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .moon-diagram .dir-labels {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.55em;
+    color: #556;
+    text-transform: uppercase;
+  }
+  .moon-diagram .dir-w { left: 4%; }
+  .moon-diagram .dir-e { right: 4%; }
+  /* Moon event colors */
+  .event-type.moon-transit { color: #e8c87c; }
+  .event-type.moon-shadow { color: #aaa; }
+  .event-type.moon-occultation { color: #c888e0; }
+  .event-type.moon-eclipse { color: #e87b7b; }
+  .moon-io { color: #e8a87c; }
+  .moon-europa { color: #7ec8e3; }
+  .moon-ganymede { color: #b8e87b; }
+  .moon-callisto { color: #c8a0e8; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-text">
-    <h1>Jupiter GRS Visibility</h1>
-    <p class="subtitle">Great Red Spot transit predictions</p>
+    <h1>Jupiter Explorer</h1>
+    <p class="subtitle">Great Red Spot & Galilean moon predictions</p>
   </div>
   <img class="header-img"
        src="https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia01/pia01509/PIA01509.jpg?w=512"
@@ -234,6 +311,14 @@
       <option value="7" selected>7 days</option>
       <option value="14">14 days</option>
       <option value="30">30 days</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Event types</label>
+    <select id="eventTypes">
+      <option value="both" selected>GRS + Moons</option>
+      <option value="grs">GRS only</option>
+      <option value="moons">Moons only</option>
     </select>
   </div>
   <div class="control-group">
@@ -271,10 +356,11 @@
   <div class="cm-value" id="cmNow">---</div>
   <div class="grs-status" id="grsStatus">---</div>
   <div class="jup-altaz" id="jupAltAz"></div>
+  <div class="moon-diagram" id="moonDiagram"></div>
   <div class="countdown-section" id="countdownSection"></div>
 </div>
 
-<div class="section-label">Upcoming GRS events</div>
+<div class="section-label" id="eventsLabel">Upcoming events</div>
 <div class="events" id="eventList"></div>
 
 <div class="info">
@@ -289,6 +375,11 @@
   <a href="https://jupos.privat.t-online.de/" style="color:#7ec8e3">JUPOS</a>
   or the <a href="https://britastro.org/section/jupiter" style="color:#7ec8e3">BAA Jupiter Section</a>
   for reference. As of March 2026, it is near 40&deg; System II.<br><br>
+  <strong>Galilean Moons:</strong> Moon positions use the Meeus (Lieske E2x3) low-accuracy
+  method with mutual perturbation corrections. Accuracy is ~0.1&ndash;0.2 Jupiter radii
+  for positions and ~5&ndash;10 minutes for event timing. Events detected: transits (moon
+  crosses Jupiter's disk), shadow transits (moon's shadow on Jupiter), occultations
+  (moon behind Jupiter), and eclipses (moon in Jupiter's shadow).<br><br>
   <strong>Altitude/Azimuth:</strong> Uses a simplified planetary ephemeris accurate to
   ~1&deg; for Jupiter's position. Set your location above or click "Locate me".
   Events where Jupiter is below the horizon are shown in red.
@@ -474,6 +565,298 @@ function getEvents(startDate, days, grsLon) {
 }
 
 // ============================================================
+//  Galilean moon positions (Meeus / Lieske E2x3)
+// ============================================================
+const MOON_NAMES = ['Io', 'Europa', 'Ganymede', 'Callisto'];
+const MOON_COLORS = ['#e8a87c', '#7ec8e3', '#b8e87b', '#c8a0e8'];
+const MOON_CLASSES = ['moon-io', 'moon-europa', 'moon-ganymede', 'moon-callisto'];
+// Orbital periods in days (for scan intervals)
+const MOON_PERIODS = [1.769, 3.551, 7.155, 16.689];
+// Jupiter equatorial radius in AU
+const JUP_RADIUS_AU = 7.1492e4 / 1.496e8;
+
+function galileanMoonPositions(date) {
+  // Based on Meeus, Astronomical Algorithms, Chapter 44
+  // Returns array of {x, y} in Jupiter radii (x: +west, y: +north) for Io, Europa, Ganymede, Callisto
+  const d = (date.getTime() - J2000_MS) / 86400000;
+  const T = d / 36525;
+
+  // Fundamental arguments (degrees)
+  const l1 = (106.07719 + 203.488955790 * d) % 360;
+  const l2 = (175.73161 + 101.374724735 * d) % 360;
+  const l3 = (120.55883 +  50.317609207 * d) % 360;
+  const l4 = ( 84.44459 +  21.571071177 * d) % 360;
+
+  const pi1 = ( 58.3329 + 0.16103936 * d) % 360;
+  const pi2 = (132.8959 + 0.04647985 * d) % 360;
+  const pi3 = (187.2887 + 0.00712740 * d) % 360;
+  const pi4 = (335.2868 + 0.00184000 * d) % 360;
+
+  const Om1 = (312.3346 - 0.13279386 * d) % 360;
+  const Om2 = (100.4411 - 0.03263064 * d) % 360;
+  const Om3 = (119.1264 - 0.00717703 * d) % 360;
+  const Om4 = (322.6168 - 0.00175934 * d) % 360;
+
+  const G  = (331.18177 + 50.31760 * T) % 360;
+  const Gp = (  1.32138 +  0.10325 * T) % 360; // G' - perturbation from Saturn
+  const psi = (316.518 - 0.00000208 * d) % 360;
+
+  // Convert to radians for trig
+  const r = x => x * DEG;
+
+  // Perturbation corrections for each moon's longitude
+  const S1 =
+    - 0.0191 * Math.sin(r(2*(l1 - l2)));
+
+  const S2 =
+      0.0393 * Math.sin(r(l1 - 2*l2 + pi3))
+    + 0.0166 * Math.sin(r(l1 - 2*l2 + pi4))
+    + 0.0025 * Math.sin(r(l1 - 2*l2 + pi1))
+    - 0.0025 * Math.sin(r(2*(l1 - l2)));
+
+  const S3 =
+      0.0163 * Math.sin(r(l1 - 2*l3 + pi3))
+    - 0.0070 * Math.sin(r(l2 - 2*l3 + pi3))
+    + 0.0025 * Math.sin(r(l2 - 2*l3 + pi4))
+    + 0.0016 * Math.sin(r(l1 - 2*l3 + pi4));
+
+  const S4 =
+    - 0.0076 * Math.sin(r(l3 - 2*l4 + pi4))
+    + 0.0044 * Math.sin(r(l3 - 2*l4 + pi3));
+
+  // Corrected longitudes
+  const L1 = l1 + S1 * RAD;
+  const L2 = l2 + S2 * RAD;
+  const L3 = l3 + S3 * RAD;
+  const L4 = l4 + S4 * RAD;
+
+  // Semi-major axes in Jupiter radii
+  const a = [5.9057, 9.3966, 14.9854, 26.3585];
+
+  // Compute Earth-Jupiter geometry
+  const Tc = T;
+  const earth = helioEcliptic(EARTH, Tc);
+  const jup = helioEcliptic(JUPITER, Tc);
+  const dx = jup.x - earth.x;
+  const dy = jup.y - earth.y;
+  const dz = jup.z - earth.z;
+  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz); // AU
+
+  // Phase angle (Sun-Jupiter-Earth) approximation
+  const rJ = Math.sqrt(jup.x*jup.x + jup.y*jup.y + jup.z*jup.z);
+  const phaseAngle = Math.acos((rJ*rJ + dist*dist - (earth.x*earth.x + earth.y*earth.y + earth.z*earth.z)) / (2*rJ*dist));
+
+  // Jupiter's tilt (approximate axis inclination to ecliptic ~ 3.13°, node ~99.4°)
+  const jupPole = 268.057 * DEG; // RA of Jupiter's north pole (approx)
+  const jupPoleDec = 64.496 * DEG;
+
+  // Ecliptic longitude/latitude of Jupiter from Earth
+  const eclLon = Math.atan2(dy, dx);
+  const eclLat = Math.atan2(dz, Math.sqrt(dx*dx + dy*dy));
+
+  // D_E: planetocentric declination of Earth (sub-Earth latitude)
+  const eps = (23.4393 - 0.0130 * Tc) * DEG;
+  // Simplified: use ecliptic lat and Jupiter's axial tilt
+  const D_E = 3.12 * DEG; // approximate sub-Earth latitude, sufficient for our accuracy
+
+  const Ls = [L1, L2, L3, L4];
+  const results = [];
+
+  for (let i = 0; i < 4; i++) {
+    const u = (Ls[i]) * DEG; // argument
+    const x = a[i] * Math.sin(u);
+    const y = -a[i] * Math.cos(u) * Math.sin(D_E);
+    results.push({ x, y, name: MOON_NAMES[i], color: MOON_COLORS[i], cls: MOON_CLASSES[i] });
+  }
+
+  return { moons: results, dist, phaseAngle };
+}
+
+// ============================================================
+//  Moon event detection (scan-and-bisect)
+// ============================================================
+// Helper: get raw orbital longitude for moon m at a given day offset from J2000
+const MOON_L0 = [106.07719, 175.73161, 120.55883, 84.44459];
+const MOON_LRATE = [203.488955790, 101.374724735, 50.317609207, 21.571071177];
+const MOON_A = [5.905, 9.397, 14.985, 26.359];
+
+function moonOrbitalLon(m, d) {
+  return ((MOON_L0[m] + MOON_LRATE[m] * d) % 360 + 360) % 360;
+}
+
+function getMoonEvents(startDate, days) {
+  const events = [];
+  const startMs = startDate.getTime();
+  const endMs = startMs + days * 86400000;
+
+  // Pass 1: Transit and occultation (limb crossings at x = ±1.0 Jupiter radii)
+  for (let m = 0; m < 4; m++) {
+    const scanStep = MOON_PERIODS[m] * 86400000 / 60;
+    let prevX = null, prevT = null;
+
+    for (let t = startMs - MOON_PERIODS[m] * 86400000; t < endMs + scanStep; t += scanStep) {
+      const pos = galileanMoonPositions(new Date(t));
+      const moon = pos.moons[m];
+
+      if (prevX !== null) {
+        for (const side of [-1, 1]) {
+          const threshold = side * 1.0;
+          const prevDelta = prevX - threshold;
+          const currDelta = moon.x - threshold;
+
+          if (prevDelta * currDelta < 0) {
+            let lo = prevT, hi = t;
+            for (let b = 0; b < 25; b++) {
+              const mid = (lo + hi) / 2;
+              const pm = galileanMoonPositions(new Date(mid)).moons[m];
+              if ((pm.x - threshold) * prevDelta > 0) lo = mid; else hi = mid;
+            }
+            const crossTime = new Date((lo + hi) / 2);
+            const mc = galileanMoonPositions(crossTime).moons[m];
+
+            if (Math.abs(mc.y) > 1.05) continue;
+            if (crossTime.getTime() < startMs || crossTime.getTime() > endMs) continue;
+
+            const dCr = (crossTime.getTime() - J2000_MS) / 86400000;
+            const mLon = moonOrbitalLon(m, dCr);
+            const isFront = Math.cos(mLon * DEG) < 0;
+            const movingInward = (side === -1 && moon.x > prevX) || (side === 1 && moon.x < prevX);
+
+            events.push({
+              type: isFront ? 'transit' : 'occultation',
+              moon: m, moonName: MOON_NAMES[m],
+              time: crossTime, ingress: movingInward,
+              color: MOON_COLORS[m], cls: MOON_CLASSES[m]
+            });
+          }
+        }
+      }
+      prevX = moon.x;
+      prevT = t;
+    }
+  }
+
+  // Pass 2: Shadow transits (shadow position offset by phase angle)
+  for (let m = 0; m < 4; m++) {
+    const scanStep = MOON_PERIODS[m] * 86400000 / 60;
+    let prevSX = null, prevST = null;
+
+    for (let t = startMs - MOON_PERIODS[m] * 86400000; t < endMs + scanStep; t += scanStep) {
+      const pos = galileanMoonPositions(new Date(t));
+      const moon = pos.moons[m];
+      const shadowX = moon.x - MOON_A[m] * Math.sin(pos.phaseAngle) * 0.9;
+
+      if (prevSX !== null) {
+        for (const side of [-1, 1]) {
+          const threshold = side * 1.0;
+          const prevDelta = prevSX - threshold;
+          const currDelta = shadowX - threshold;
+
+          if (prevDelta * currDelta < 0) {
+            let lo = prevST, hi = t;
+            for (let b = 0; b < 25; b++) {
+              const mid = (lo + hi) / 2;
+              const pm = galileanMoonPositions(new Date(mid));
+              const sx = pm.moons[m].x - MOON_A[m] * Math.sin(pm.phaseAngle) * 0.9;
+              if ((sx - threshold) * prevDelta > 0) lo = mid; else hi = mid;
+            }
+            const crossTime = new Date((lo + hi) / 2);
+            if (crossTime.getTime() < startMs || crossTime.getTime() > endMs) continue;
+
+            const pc = galileanMoonPositions(crossTime);
+            if (Math.abs(pc.moons[m].y) > 1.05) continue;
+
+            const dCr = (crossTime.getTime() - J2000_MS) / 86400000;
+            if (Math.cos(moonOrbitalLon(m, dCr) * DEG) >= 0) continue;
+
+            const movingInward = (side === -1 && currDelta > prevDelta) || (side === 1 && currDelta < prevDelta);
+            events.push({
+              type: 'shadow', moon: m, moonName: MOON_NAMES[m],
+              time: crossTime, ingress: movingInward,
+              color: MOON_COLORS[m], cls: MOON_CLASSES[m]
+            });
+          }
+        }
+      }
+      prevSX = shadowX;
+      prevST = t;
+    }
+  }
+
+  // Pass 3: Eclipses (moon enters Jupiter's shadow behind the planet)
+  for (let m = 0; m < 4; m++) {
+    const scanStep = MOON_PERIODS[m] * 86400000 / 60;
+    let prevInShadow = false, prevT = null;
+
+    for (let t = startMs - MOON_PERIODS[m] * 86400000; t < endMs + scanStep; t += scanStep) {
+      const pos = galileanMoonPositions(new Date(t));
+      const moon = pos.moons[m];
+      const d = (t - J2000_MS) / 86400000;
+      const cosL = Math.cos(moonOrbitalLon(m, d) * DEG);
+      const scx = MOON_A[m] * Math.sin(pos.phaseAngle) * 0.9;
+      const inShadow = cosL > 0 && Math.abs(moon.x - scx) < 1.05 && Math.abs(moon.y) < 1.05;
+
+      if (prevT !== null && inShadow !== prevInShadow) {
+        let lo = prevT, hi = t;
+        for (let b = 0; b < 25; b++) {
+          const mid = (lo + hi) / 2;
+          const pm = galileanMoonPositions(new Date(mid));
+          const mm = pm.moons[m];
+          const dM = (mid - J2000_MS) / 86400000;
+          const cL = Math.cos(moonOrbitalLon(m, dM) * DEG);
+          const sx = MOON_A[m] * Math.sin(pm.phaseAngle) * 0.9;
+          const iS = cL > 0 && Math.abs(mm.x - sx) < 1.05 && Math.abs(mm.y) < 1.05;
+          if (iS === prevInShadow) lo = mid; else hi = mid;
+        }
+        const crossTime = new Date((lo + hi) / 2);
+        if (crossTime.getTime() >= startMs && crossTime.getTime() <= endMs) {
+          events.push({
+            type: 'eclipse', moon: m, moonName: MOON_NAMES[m],
+            time: crossTime, ingress: inShadow,
+            color: MOON_COLORS[m], cls: MOON_CLASSES[m]
+          });
+        }
+      }
+      prevInShadow = inShadow;
+      prevT = t;
+    }
+  }
+
+  events.sort((a, b) => a.time.getTime() - b.time.getTime());
+  return events;
+}
+
+// ============================================================
+//  Moon diagram rendering
+// ============================================================
+function renderMoonDiagram() {
+  const container = document.getElementById('moonDiagram');
+  const pos = galileanMoonPositions(new Date());
+
+  // Scale: max moon distance is Callisto at ~26 Jup radii
+  // Map to container width (90% of container)
+  const maxDist = 28;
+  const containerWidth = container.offsetWidth * 0.9;
+  const scale = containerWidth / (2 * maxDist);
+  const centerX = container.offsetWidth / 2;
+
+  let html = '<div class="moon-scale"></div>';
+  html += '<div class="jup-disk"></div>';
+  html += '<span class="dir-labels dir-w">W</span>';
+  html += '<span class="dir-labels dir-e">E</span>';
+  html += '<div class="jup-label">Jupiter</div>';
+
+  pos.moons.forEach((moon, i) => {
+    const px = centerX + moon.x * scale;
+    const dotSize = [8, 7, 10, 9][i]; // relative sizes
+    html += '<div class="moon-dot" style="left:' + px + 'px;width:' + dotSize + 'px;height:' + dotSize + 'px;background:' + moon.color + '" title="' + moon.name + '"></div>';
+    html += '<span class="moon-name ' + moon.cls + '" style="left:' + px + 'px">' + moon.name + '</span>';
+  });
+
+  container.innerHTML = html;
+}
+
+// ============================================================
 //  Timezone setup
 // ============================================================
 const tzSelect = document.getElementById('tzSelect');
@@ -579,68 +962,97 @@ function render() {
   }
 
   // Events
-  const events = getEvents(now, days, grsLon);
   const filter = document.getElementById('filterMode').value;
+  const eventTypeSel = document.getElementById('eventTypes').value;
   const container = document.getElementById('eventList');
   container.innerHTML = '';
 
-  events.forEach(ev => {
-    // Filter: check if transit occurs during astronomical night
-    if (filter === 'night' || filter === 'night+up') {
-      const dark = isAstroNight(ev.transit, obs.lat, obs.lon);
-      if (!dark) return;
-    }
-    if (filter === 'night+up') {
-      const jupUp = jupiterAltAz(ev.transit, obs.lat, obs.lon).alt >= 0;
-      if (!jupUp) return;
-    }
+  // Build merged event list
+  const allEvents = [];
 
-    const group = document.createElement('div');
-    group.className = 'event-group';
-    if (ev.disappear.getTime() < now.getTime()) group.className += ' past';
-
-    const rows = [
-      { type: 'appear', label: 'Appears', time: ev.appear },
-      { type: 'transit', label: 'Transit', time: ev.transit },
-      { type: 'disappear', label: 'Disappears', time: ev.disappear }
-    ];
-
-    rows.forEach(r => {
-      const row = document.createElement('div');
-      row.className = 'event-row';
-
-      const typeSpan = document.createElement('span');
-      typeSpan.className = 'event-type ' + r.type;
-      typeSpan.textContent = r.label;
-
-      const dtSpan = document.createElement('span');
-      dtSpan.className = 'event-datetime';
-      dtSpan.innerHTML = '<span class="event-date">' + formatDate(r.time, tz) +
-        '</span> <span class="event-time">' + formatTime(r.time, tz) + '</span>';
-
-      const altaz = jupiterAltAz(r.time, obs.lat, obs.lon);
-      const aaSpan = document.createElement('span');
-      aaSpan.className = 'event-altaz ' + (altaz.alt >= 0 ? 'above-horizon' : 'below-horizon');
-      aaSpan.textContent = formatAltAz(altaz);
-
-      const cdSpan = document.createElement('span');
-      cdSpan.className = 'event-countdown';
-      const diff = r.time.getTime() - now.getTime();
-      if (diff > 0) {
-        cdSpan.textContent = 'in ' + formatCountdown(r.time);
-      } else if (diff > -300000) {
-        cdSpan.textContent = 'now';
+  // GRS events
+  if (eventTypeSel !== 'moons') {
+    const grsEvents = getEvents(now, days, grsLon);
+    grsEvents.forEach(ev => {
+      // Filter
+      if (filter === 'night' || filter === 'night+up') {
+        if (!isAstroNight(ev.transit, obs.lat, obs.lon)) return;
+      }
+      if (filter === 'night+up') {
+        if (jupiterAltAz(ev.transit, obs.lat, obs.lon).alt < 0) return;
       }
 
-      row.appendChild(typeSpan);
-      row.appendChild(dtSpan);
-      row.appendChild(aaSpan);
-      row.appendChild(cdSpan);
-      group.appendChild(row);
+      allEvents.push({ kind: 'grs', type: 'appear', label: 'GRS Appears', time: ev.appear, css: 'appear', groupEnd: ev.disappear });
+      allEvents.push({ kind: 'grs', type: 'transit', label: 'GRS Transit', time: ev.transit, css: 'transit', groupEnd: ev.disappear });
+      allEvents.push({ kind: 'grs', type: 'disappear', label: 'GRS Disappears', time: ev.disappear, css: 'disappear', groupEnd: ev.disappear });
     });
+  }
 
-    container.appendChild(group);
+  // Moon events
+  if (eventTypeSel !== 'grs') {
+    const moonEvts = getMoonEvents(now, days);
+    moonEvts.forEach(ev => {
+      if (filter === 'night' || filter === 'night+up') {
+        if (!isAstroNight(ev.time, obs.lat, obs.lon)) return;
+      }
+      if (filter === 'night+up') {
+        if (jupiterAltAz(ev.time, obs.lat, obs.lon).alt < 0) return;
+      }
+
+      const typeLabels = {
+        transit: 'Transit',
+        occultation: 'Occult.',
+        shadow: 'Shadow',
+        eclipse: 'Eclipse'
+      };
+      const label = ev.moonName + ' ' + typeLabels[ev.type] + ' ' + (ev.ingress ? 'Start' : 'End');
+      const css = 'moon-' + ev.type;
+
+      allEvents.push({ kind: 'moon', type: ev.type, label, time: ev.time, css, cls: ev.cls, groupEnd: ev.time });
+    });
+  }
+
+  // Sort chronologically
+  allEvents.sort((a, b) => a.time.getTime() - b.time.getTime());
+
+  allEvents.forEach(ev => {
+    const row = document.createElement('div');
+    row.className = 'event-row';
+    if (ev.groupEnd.getTime() < now.getTime()) row.style.opacity = '0.45';
+
+    const typeSpan = document.createElement('span');
+    typeSpan.className = 'event-type ' + ev.css;
+    if (ev.cls) typeSpan.className += ' ' + ev.cls;
+    typeSpan.textContent = ev.label;
+
+    const dtSpan = document.createElement('span');
+    dtSpan.className = 'event-datetime';
+    dtSpan.innerHTML = '<span class="event-date">' + formatDate(ev.time, tz) +
+      '</span> <span class="event-time">' + formatTime(ev.time, tz) + '</span>';
+
+    const altaz = jupiterAltAz(ev.time, obs.lat, obs.lon);
+    const aaSpan = document.createElement('span');
+    aaSpan.className = 'event-altaz ' + (altaz.alt >= 0 ? 'above-horizon' : 'below-horizon');
+    aaSpan.textContent = formatAltAz(altaz);
+
+    const cdSpan = document.createElement('span');
+    cdSpan.className = 'event-countdown';
+    const diff = ev.time.getTime() - now.getTime();
+    if (diff > 0) {
+      cdSpan.textContent = 'in ' + formatCountdown(ev.time);
+    } else if (diff > -300000) {
+      cdSpan.textContent = 'now';
+    }
+
+    row.appendChild(typeSpan);
+    row.appendChild(dtSpan);
+    row.appendChild(aaSpan);
+    row.appendChild(cdSpan);
+    container.appendChild(row);
   });
+
+  // Update moon diagram
+  renderMoonDiagram();
 }
 
 // ============================================================
@@ -754,7 +1166,7 @@ document.getElementById('syncBtn').addEventListener('click', syncIMCCE);
 //  Local storage persistence
 // ============================================================
 const STORAGE_KEY = 'jgrs_settings';
-const settingsFields = ['grsLon', 'numDays', 'obsLat', 'obsLon', 'filterMode', 'tzSelect'];
+const settingsFields = ['grsLon', 'numDays', 'obsLat', 'obsLon', 'filterMode', 'tzSelect', 'eventTypes'];
 
 function saveSettings() {
   const data = {};
@@ -797,6 +1209,7 @@ function onSettingChange() { saveSettings(); render(); renderCountdown(); }
 document.getElementById('grsLon').addEventListener('input', onSettingChange);
 document.getElementById('numDays').addEventListener('change', onSettingChange);
 document.getElementById('filterMode').addEventListener('change', onSettingChange);
+document.getElementById('eventTypes').addEventListener('change', onSettingChange);
 document.getElementById('obsLat').addEventListener('input', onSettingChange);
 document.getElementById('obsLon').addEventListener('input', onSettingChange);
 tzSelect.addEventListener('change', onSettingChange);

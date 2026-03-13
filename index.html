@@ -220,6 +220,17 @@
     background: radial-gradient(circle at 40% 40%, #f0d8a0, #c89860);
     border: 1px solid #a08050;
     z-index: 2;
+    overflow: hidden;
+  }
+  .moon-diagram .grs-dot {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 5px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, #e85030, #c03020);
+    transform: translate(-50%, -50%);
+    z-index: 3;
   }
   .moon-diagram .jup-label {
     position: absolute;
@@ -839,8 +850,20 @@ function renderMoonDiagram() {
   const scale = containerWidth / (2 * maxDist);
   const centerX = container.offsetWidth / 2;
 
+  // GRS position on Jupiter disk
+  const cm = getCMII(new Date());
+  const grsLon = parseFloat(document.getElementById('grsLon').value) || 0;
+  let grsDelta = ((grsLon - cm) % 360 + 540) % 360 - 180;
+  let grsHtml = '';
+  if (Math.abs(grsDelta) < 90) {
+    const diskR = 14; // half of 28px disk
+    const grsX = diskR + diskR * Math.sin(grsDelta * Math.PI / 180);
+    const opacity = Math.abs(grsDelta) < 37.5 ? 1.0 : 1.0 - (Math.abs(grsDelta) - 37.5) / 52.5;
+    grsHtml = '<div class="grs-dot" style="left:' + grsX.toFixed(1) + 'px;opacity:' + opacity.toFixed(2) + '" title="GRS (' + Math.abs(grsDelta).toFixed(0) + '° from CM)"></div>';
+  }
+
   let html = '<div class="moon-scale"></div>';
-  html += '<div class="jup-disk"></div>';
+  html += '<div class="jup-disk">' + grsHtml + '</div>';
   html += '<span class="dir-labels dir-w">W</span>';
   html += '<span class="dir-labels dir-e">E</span>';
   html += '<div class="jup-label">Jupiter</div>';

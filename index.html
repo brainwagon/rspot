@@ -224,7 +224,6 @@
   }
   .moon-diagram .grs-dot {
     position: absolute;
-    top: 50%;
     width: 8px;
     height: 5px;
     border-radius: 50%;
@@ -1218,9 +1217,10 @@ function renderMoonDiagram() {
   let grsHtml = '';
   if (Math.abs(grsDelta) < 90) {
     const diskR = 14; // half of 28px disk
-    const grsX = diskR + diskR * Math.sin(grsDelta * Math.PI / 180);
+    const grsX = diskR - diskR * Math.sin(grsDelta * Math.PI / 180);
+    const grsY = diskR + diskR * Math.sin(23 * Math.PI / 180); // GRS latitude ~-23° (south)
     const opacity = Math.abs(grsDelta) < 37.5 ? 1.0 : 1.0 - (Math.abs(grsDelta) - 37.5) / 52.5;
-    grsHtml = '<div class="grs-dot" style="left:' + grsX.toFixed(1) + 'px;opacity:' + opacity.toFixed(2) + '" title="GRS (' + Math.abs(grsDelta).toFixed(0) + '° from CM)"></div>';
+    grsHtml = '<div class="grs-dot" style="left:' + grsX.toFixed(1) + 'px;top:' + grsY.toFixed(1) + 'px;opacity:' + opacity.toFixed(2) + '" title="GRS (' + Math.abs(grsDelta).toFixed(0) + '° from CM)"></div>';
   }
 
   let html = '<div class="moon-scale"></div>';

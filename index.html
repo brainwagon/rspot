@@ -1339,7 +1339,8 @@ function render() {
   // Jupiter distance in light-minutes
   const jupPos = galileanMoonPositions(now);
   const lightMin = jupPos.dist * 8.3167;
-  document.getElementById('jupDist').textContent = 'Distance: ' + lightMin.toFixed(2) + ' light-min (' + jupPos.dist.toFixed(3) + ' AU)';
+  const angDiam = 2 * JUP_RADIUS_AU / jupPos.dist * (180 / Math.PI) * 3600;
+  document.getElementById('jupDist').textContent = 'Distance: ' + lightMin.toFixed(2) + ' light-min (' + jupPos.dist.toFixed(3) + ' AU) — angular diameter: ' + angDiam.toFixed(1) + '\u2033';
 
   // GRS distance from CM
   let dist = ((grsLon - cm) % 360 + 360) % 360;

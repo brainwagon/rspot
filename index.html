@@ -321,6 +321,7 @@
   <div class="cm-value" id="cmNow">---</div>
   <div class="grs-status" id="grsStatus">---</div>
   <div class="jup-altaz" id="jupAltAz"></div>
+  <div class="jup-altaz" id="jupDist"></div>
   <div class="countdown-section" id="countdownSection"></div>
 </div>
 
@@ -1047,7 +1048,8 @@ function galileanMoonPositions(date) {
     });
   }
 
-  return { moons: results, dist, phaseAngle };
+  const shadowDir = Math.sign(Math.sin(lambda0 - sunlon));
+  return { moons: results, dist, phaseAngle, shadowDir };
 }
 
 // Semi-major axes in Jupiter radii (for shadow offset calculations)
@@ -1115,7 +1117,7 @@ function getMoonEvents(startDate, days) {
     for (let t = startMs - MOON_PERIODS[m] * 86400000; t < endMs + scanStep; t += scanStep) {
       const pos = galileanMoonPositions(new Date(t));
       const moon = pos.moons[m];
-      const shadowX = moon.x - MOON_A[m] * Math.sin(pos.phaseAngle) * 0.9;
+      const shadowX = moon.x + MOON_A[m] * Math.sin(pos.phaseAngle) * pos.shadowDir * 0.9;
 
       if (prevSX !== null) {
         for (const side of [-1, 1]) {
@@ -1128,7 +1130,7 @@ function getMoonEvents(startDate, days) {
             for (let b = 0; b < 25; b++) {
               const mid = (lo + hi) / 2;
               const pm = galileanMoonPositions(new Date(mid));
-              const sx = pm.moons[m].x - MOON_A[m] * Math.sin(pm.phaseAngle) * 0.9;
+              const sx = pm.moons[m].x + MOON_A[m] * Math.sin(pm.phaseAngle) * pm.shadowDir * 0.9;
               if ((sx - threshold) * prevDelta > 0) lo = mid; else hi = mid;
             }
             const crossTime = new Date((lo + hi) / 2);
@@ -1163,8 +1165,8 @@ function getMoonEvents(startDate, days) {
       const pos = galileanMoonPositions(new Date(t));
       const moon = pos.moons[m];
       // Moon is behind Jupiter (z < 0) and near the shadow cone
-      const scx = MOON_A[m] * Math.sin(pos.phaseAngle) * 0.9;
-      const inShadow = moon.z < 0 && Math.abs(moon.x - scx) < 1.05 && Math.abs(moon.y) < 1.05;
+      const scx = -MOON_A[m] * Math.sin(pos.phaseAngle) * pos.shadowDir * 0.9;
+      const inShadow = moon.z < 0 && Math.hypot(moon.x - scx, moon.y) < 1.0;
 
       if (prevT !== null && inShadow !== prevInShadow) {
         let lo = prevT, hi = t;
@@ -1172,8 +1174,8 @@ function getMoonEvents(startDate, days) {
           const mid = (lo + hi) / 2;
           const pm = galileanMoonPositions(new Date(mid));
           const mm = pm.moons[m];
-          const sx = MOON_A[m] * Math.sin(pm.phaseAngle) * 0.9;
-          const iS = mm.z < 0 && Math.abs(mm.x - sx) < 1.05 && Math.abs(mm.y) < 1.05;
+          const sx = -MOON_A[m] * Math.sin(pm.phaseAngle) * pm.shadowDir * 0.9;
+          const iS = mm.z < 0 && Math.hypot(mm.x - sx, mm.y) < 1.0;
           if (iS === prevInShadow) lo = mid; else hi = mid;
         }
         const crossTime = new Date((lo + hi) / 2);
@@ -1333,6 +1335,11 @@ function render() {
   const jupEl = document.getElementById('jupAltAz');
   jupEl.textContent = 'Jupiter now: ' + formatAltAz(jupNow);
   jupEl.className = 'jup-altaz ' + (jupNow.alt >= 0 ? 'above-horizon' : 'below-horizon');
+
+  // Jupiter distance in light-minutes
+  const jupPos = galileanMoonPositions(now);
+  const lightMin = jupPos.dist * 8.3167;
+  document.getElementById('jupDist').textContent = 'Distance: ' + lightMin.toFixed(2) + ' light-min (' + jupPos.dist.toFixed(3) + ' AU)';
 
   // GRS distance from CM
   let dist = ((grsLon - cm) % 360 + 360) % 360;

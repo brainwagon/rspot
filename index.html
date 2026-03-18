@@ -207,7 +207,7 @@
   .moon-diagram {
     margin-bottom: 10px;
     position: relative;
-    height: 70px;
+    height: 150px;
   }
   .moon-diagram .jup-disk {
     position: absolute;
@@ -253,7 +253,6 @@
   }
   .moon-diagram .moon-dot {
     position: absolute;
-    top: 50%;
     width: 10px;
     height: 10px;
     border-radius: 50%;
@@ -263,7 +262,6 @@
   }
   .moon-diagram .moon-name {
     position: absolute;
-    bottom: 2px;
     transform: translateX(-50%);
     font-size: 0.6em;
     font-weight: 600;
@@ -1088,7 +1086,7 @@ function getMoonEvents(startDate, days) {
             const crossTime = new Date((lo + hi) / 2);
             const mc = galileanMoonPositions(crossTime).moons[m];
 
-            if (Math.abs(mc.y) > 1.05) continue;
+            if (Math.abs(mc.y) > 0.934) continue;
             if (crossTime.getTime() < startMs || crossTime.getTime() > endMs) continue;
 
             // z > 0 means moon is in front of Jupiter (transit), z < 0 means behind (occultation)
@@ -1137,7 +1135,7 @@ function getMoonEvents(startDate, days) {
             if (crossTime.getTime() < startMs || crossTime.getTime() > endMs) continue;
 
             const pc = galileanMoonPositions(crossTime);
-            if (Math.abs(pc.moons[m].y) > 1.05) continue;
+            if (Math.abs(pc.moons[m].y) > 0.934) continue;
 
             // Shadow transits only happen when moon is in front of Jupiter (z > 0)
             if (pc.moons[m].z <= 0) continue;
@@ -1209,6 +1207,7 @@ function renderMoonDiagram() {
   const containerWidth = container.offsetWidth * 0.9;
   const scale = containerWidth / (2 * maxDist);
   const centerX = container.offsetWidth / 2;
+  const centerY = container.offsetHeight / 2;
 
   // GRS position on Jupiter disk
   const cm = getCMII(new Date());
@@ -1231,9 +1230,13 @@ function renderMoonDiagram() {
 
   pos.moons.forEach((moon, i) => {
     const px = centerX + moon.x * scale;
+    const py = centerY - moon.y * scale;  // north = up = smaller top value
     const dotSize = [8, 7, 10, 9][i]; // relative sizes
-    html += '<div class="moon-dot" style="left:' + px + 'px;width:' + dotSize + 'px;height:' + dotSize + 'px;background:' + moon.color + '" title="' + moon.name + '"></div>';
-    html += '<span class="moon-name ' + moon.cls + '" style="left:' + px + 'px">' + moon.name + '</span>';
+    const halfDot = dotSize / 2;
+    // Place label below dot, but flip above if near bottom edge
+    const labelTop = (py + halfDot + 10 > container.offsetHeight - 4) ? (py - halfDot - 12) : (py + halfDot + 2);
+    html += '<div class="moon-dot" style="left:' + px + 'px;top:' + py + 'px;width:' + dotSize + 'px;height:' + dotSize + 'px;background:' + moon.color + '" title="' + moon.name + '"></div>';
+    html += '<span class="moon-name ' + moon.cls + '" style="left:' + px + 'px;top:' + labelTop + 'px">' + moon.name + '</span>';
   });
 
   container.innerHTML = html;

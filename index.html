@@ -1,15 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jupiter GRS & Galilean Moons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    color-scheme: dark;
+    --bg:          #090d18;
+    --bg-card:     #111828;
+    --bg-input:    #141928;
+    --border:      #2c3350;
+    --text:        #d8dde8;
+    --text-dim:    #96a6c0;
+    --text-muted:  #7888a4;
+    --accent-o:    #e8a87c;
+    --accent-t:    #7ec8e3;
+    --accent-g:    #7be87b;
+    --accent-g2:   #5ec45c;
+    --accent-r:    #e87b7b;
+    --accent-p:    #b090d8;
+    --accent-y:    #b8e87b;
+    --mono:        'JetBrains Mono', monospace;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #0a0e1a;
-    color: #c8cdd8;
+    font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
     min-height: 100vh;
     padding: 20px;
   }
@@ -21,25 +42,23 @@
     margin-bottom: 20px;
     flex-wrap: wrap;
   }
-  .header-text {
-    text-align: center;
-  }
+  .header-text { text-align: center; }
   .header-img {
     width: 256px;
     height: 256px;
     object-fit: cover;
     border-radius: 50%;
-    border: 2px solid #2a2f45;
+    border: 2px solid var(--border);
     flex-shrink: 0;
   }
   h1 {
-    color: #e8a87c;
+    color: var(--accent-o);
     font-size: 1.6em;
     margin-bottom: 4px;
   }
   .subtitle {
-    color: #667;
-    font-size: 0.85em;
+    color: var(--text-dim);
+    font-size: 0.88em;
   }
   .controls {
     max-width: 700px;
@@ -57,59 +76,61 @@
   }
   .control-group label {
     font-size: 0.75em;
-    color: #889;
+    color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   input, select {
-    background: #151a2e;
-    border: 1px solid #2a2f45;
-    color: #c8cdd8;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 0.9em;
+    font-family: inherit;
   }
-  input:focus, select:focus { outline: none; border-color: #e8a87c; }
+  input:focus, select:focus { outline: none; border-color: var(--accent-o); }
   button {
     background: #1a2040;
-    border: 1px solid #2a2f45;
-    color: #c8cdd8;
+    border: 1px solid var(--border);
+    color: var(--text);
     padding: 8px 14px;
     border-radius: 6px;
-    font-size: 0.8em;
+    font-size: 0.85em;
+    font-family: inherit;
     cursor: pointer;
   }
-  button:hover { border-color: #e8a87c; color: #e8a87c; }
-  button:disabled { opacity: 0.5; cursor: default; }
+  button:hover { border-color: var(--accent-o); color: var(--accent-o); }
+  button:disabled { opacity: 0.45; cursor: default; }
   .sync-status {
     max-width: 700px;
     margin: -16px auto 16px;
     text-align: center;
-    font-size: 0.72em;
-    color: #667;
+    font-size: 0.78em;
+    color: var(--text-muted);
     min-height: 1.2em;
   }
-  .sync-status.ok { color: #7be87b; }
-  .sync-status.err { color: #e87b7b; }
+  .sync-status.ok  { color: var(--accent-g); }
+  .sync-status.err { color: var(--accent-r); }
   .now-bar {
     max-width: 700px;
     margin: 0 auto 20px;
-    background: #151a2e;
-    border: 1px solid #2a2f45;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px 16px;
     text-align: center;
   }
-  .now-bar .cm-label { color: #889; font-size: 0.8em; }
-  .now-bar .cm-value { color: #7ec8e3; font-size: 1.3em; font-weight: 600; }
+  .now-bar .cm-label  { color: var(--text-dim); font-size: 0.82em; }
+  .now-bar .cm-value  { color: var(--accent-t); font-size: 1.35em; font-weight: 700; font-family: var(--mono); }
   .now-bar .grs-status { margin-top: 6px; font-size: 0.9em; }
-  .now-bar .jup-altaz { margin-top: 4px; font-size: 0.8em; color: #889; }
-  .visible { color: #7be87b; }
-  .not-visible { color: #e87b7b; }
+  .now-bar .jup-altaz { margin-top: 5px; font-size: 0.82em; color: var(--text-dim); font-family: var(--mono); }
+  .visible     { color: var(--accent-g); }
+  .not-visible { color: var(--accent-r); }
   .countdown-section {
     margin-top: 14px;
     padding-top: 12px;
-    border-top: 1px solid #2a2f45;
+    border-top: 1px solid var(--border);
     display: flex;
     justify-content: center;
     gap: 28px;
@@ -122,22 +143,22 @@
     gap: 2px;
   }
   .countdown-item .cd-label {
-    font-size: 0.65em;
+    font-size: 0.72em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-  .countdown-item .cd-label.appear { color: #5a8a58; }
-  .countdown-item .cd-label.transit { color: #7be87b; }
-  .countdown-item .cd-label.disappear { color: #5a8a58; }
+  .countdown-item .cd-label.appear    { color: var(--accent-g2); }
+  .countdown-item .cd-label.transit   { color: var(--accent-g); }
+  .countdown-item .cd-label.disappear { color: var(--accent-g2); }
   .countdown-item .cd-timer {
+    font-family: var(--mono);
     font-size: 1.4em;
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: #dde;
+    color: #e8eaf0;
   }
   .countdown-item .cd-subtext {
-    font-size: 0.65em;
-    color: #667;
+    font-size: 0.72em;
+    color: var(--text-muted);
   }
   .events {
     max-width: 700px;
@@ -147,7 +168,7 @@
     gap: 2px;
   }
   .event-group {
-    background: #111628;
+    background: var(--bg-card);
     border-radius: 8px;
     overflow: hidden;
     margin-bottom: 10px;
@@ -155,42 +176,43 @@
   .event-group.past { opacity: 0.45; }
   .event-row {
     display: grid;
-    grid-template-columns: 90px 1fr auto auto 70px;
+    grid-template-columns: 100px 1fr auto auto 76px;
     align-items: center;
-    padding: 8px 16px;
+    padding: 9px 16px;
     gap: 12px;
-    border-bottom: 1px solid #1a1f35;
+    border-bottom: 1px solid #181e30;
   }
   .event-row:last-child { border-bottom: none; }
   .event-type {
-    font-size: 0.75em;
+    font-size: 0.78em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    font-weight: 600;
+    font-weight: 700;
   }
-  .event-type.appear { color: #5a8a58; }
-  .event-type.transit { color: #7be87b; }
-  .event-type.disappear { color: #5a8a58; }
-  .event-datetime { font-size: 0.9em; }
-  .event-date { color: #99a; }
-  .event-time { color: #dde; font-weight: 600; }
+  .event-type.appear    { color: var(--accent-g2); }
+  .event-type.transit   { color: var(--accent-g); }
+  .event-type.disappear { color: var(--accent-g2); }
+  .event-datetime { font-size: 0.92em; }
+  .event-date { color: var(--text-dim); }
+  .event-time { color: #e8eaf0; font-weight: 700; font-family: var(--mono); }
   .event-altaz {
-    font-size: 0.78em;
-    font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+    font-size: 0.8em;
     white-space: nowrap;
   }
-  .above-horizon { color: #7ec8e3; }
-  .below-horizon { color: #e87b7b; }
+  .above-horizon { color: var(--accent-t); }
+  .below-horizon { color: var(--accent-r); }
   .event-countdown {
     text-align: right;
+    font-family: var(--mono);
     font-size: 0.8em;
-    color: #778;
+    color: var(--text-dim);
   }
   .section-label {
-    font-size: 0.7em;
+    font-size: 0.72em;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #556;
+    color: var(--text-muted);
     margin: 16px 0 8px;
     max-width: 700px;
     margin-left: auto;
@@ -199,9 +221,9 @@
   .info {
     max-width: 700px;
     margin: 24px auto 0;
-    font-size: 0.75em;
-    color: #556;
-    line-height: 1.5;
+    font-size: 0.82em;
+    color: var(--text-muted);
+    line-height: 1.6;
   }
   /* Moon diagram */
   .moon-diagram {
@@ -236,8 +258,8 @@
     left: 50%;
     top: 2px;
     transform: translateX(-50%);
-    font-size: 0.6em;
-    color: #667;
+    font-size: 0.68em;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -263,43 +285,44 @@
   .moon-diagram .moon-name {
     position: absolute;
     transform: translateX(-50%);
-    font-size: 0.6em;
-    font-weight: 600;
+    font-size: 0.68em;
+    font-weight: 700;
     white-space: nowrap;
   }
   .moon-diagram .dir-labels {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 0.55em;
-    color: #556;
+    font-size: 0.68em;
+    color: var(--text-muted);
     text-transform: uppercase;
   }
   .moon-diagram .dir-w { left: 4%; }
   .moon-diagram .dir-e { right: 4%; }
   /* Moon event colors */
-  .event-type.moon-transit { color: #5ec4e8; }
-  .event-type.moon-shadow { color: #d0d0d0; }
-  .event-type.moon-occultation { color: #8868a0; }
-  .event-type.moon-eclipse { color: #8868a0; }
-  .moon-io { color: #e8a87c; }
-  .moon-europa { color: #7ec8e3; }
-  .moon-ganymede { color: #b8e87b; }
-  .moon-callisto { color: #c8a0e8; }
+  .event-type.moon-transit     { color: #5ec4e8; }
+  .event-type.moon-shadow      { color: #d0d4dc; }
+  .event-type.moon-occultation { color: var(--accent-p); }
+  .event-type.moon-eclipse     { color: var(--accent-p); }
+  .moon-io       { color: var(--accent-o); }
+  .moon-europa   { color: var(--accent-t); }
+  .moon-ganymede { color: var(--accent-y); }
+  .moon-callisto { color: var(--accent-p); }
   .refine-btn {
     background: none;
-    border: 1px solid #2a2f45;
-    color: #7ec8e3;
-    font-size: 0.65em;
-    padding: 2px 6px;
+    border: 1px solid var(--border);
+    color: var(--accent-t);
+    font-size: 0.72em;
+    padding: 2px 7px;
     border-radius: 4px;
     cursor: pointer;
     margin-left: 6px;
     vertical-align: middle;
+    font-family: inherit;
   }
-  .refine-btn:hover { background: #1a2040; border-color: #7ec8e3; }
-  .refine-btn:disabled { color: #556; border-color: #1a1f35; cursor: default; }
-  .refine-btn.refined { color: #7be87b; border-color: #7be87b; }
+  .refine-btn:hover    { background: #1a2040; border-color: var(--accent-t); }
+  .refine-btn:disabled { color: var(--text-muted); border-color: #1a1f35; cursor: default; }
+  .refine-btn.refined  { color: var(--accent-g); border-color: var(--accent-g); }
 </style>
 </head>
 <body>

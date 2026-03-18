@@ -425,7 +425,10 @@
   is ~1 min (Io), ~3 min (Europa), ~7 min (Ganymede), ~15 min (Callisto),
   verified against JPL Horizons. Events detected: transits (moon
   crosses Jupiter's disk), shadow transits (moon's shadow on Jupiter), occultations
-  (moon behind Jupiter), and eclipses (moon in Jupiter's shadow).<br><br>
+  (moon behind Jupiter), and eclipses (moon in Jupiter's shadow).
+  <strong>Shadow transit and eclipse times are only approximate</strong> — timing
+  errors of several hours are possible and these events should not be relied upon
+  for precise observation planning.<br><br>
   <strong>Altitude/Azimuth:</strong> Uses a simplified planetary ephemeris accurate to
   ~1&deg; for Jupiter's position. Set your location above or click "Locate me".
   Events where Jupiter is below the horizon are shown in red.
@@ -1464,7 +1467,7 @@ function render() {
     row.appendChild(typeSpan);
     row.appendChild(dtSpan);
 
-    if (ev.kind === 'moon') {
+    if (ev.kind === 'moon' && (ev.type === 'transit' || ev.type === 'occultation')) {
       const refBtn = document.createElement('button');
       refBtn.className = 'refine-btn';
       refBtn.textContent = 'JPL';
@@ -1495,10 +1498,10 @@ async function refineEventTime(btn, moonIdx, eventType, ingress, predictedTime) 
   btn.textContent = '...';
 
   try {
-    // Query window: ±2 hours around predicted time, 1-minute steps
+    // Query window: ±6 hours around predicted time, 5-minute steps
     const t = predictedTime;
-    const startTime = new Date(t.getTime() - 2 * 3600000);
-    const endTime = new Date(t.getTime() + 2 * 3600000);
+    const startTime = new Date(t.getTime() - 6 * 3600000);
+    const endTime = new Date(t.getTime() + 6 * 3600000);
     const fmtTime = d => {
       const y = d.getUTCFullYear();
       const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
@@ -1513,23 +1516,26 @@ async function refineEventTime(btn, moonIdx, eventType, ingress, predictedTime) 
     const q = s => encodeURIComponent(s).replace(/'/g, '%27');
     const baseUrl = 'https://ssd.jpl.nasa.gov/api/horizons.api?format=text';
     const common = '&OBJ_DATA=NO&MAKE_EPHEM=YES&TABLE_TYPE=OBSERVER&CSV_FORMAT=YES&EXTRA_PREC=YES';
-    const timeParams = '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(endTime) + '&STEP_SIZE=' + q("'1 min'");
+    const timeParams = '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(endTime) + '&STEP_SIZE=' + q("'5 min'");
 
     // Fetch satellite X,Y (quantity 6) and Jupiter angular diameter (quantity 13 on Jupiter)
     const satUrl = baseUrl + '&COMMAND=' + q("'" + satId + "'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'6'") + timeParams;
     const jupEnd = new Date(startTime.getTime() + 60000);
     const jupUrl = baseUrl + '&COMMAND=' + q("'599'") + '&CENTER=' + q("'500@399'") + common + '&QUANTITIES=' + q("'13'") + '&START_TIME=' + fmtTime(startTime) + '&STOP_TIME=' + fmtTime(jupEnd) + '&STEP_SIZE=' + q("'1 min'");
 
-    // Try direct fetch; if CORS blocks it, try via corsproxy.io
+    // Try direct fetch; if CORS blocks it, try proxies (url is already encoded — do NOT double-encode)
     async function fetchHorizons(url) {
       try {
         const resp = await fetch(url);
         if (resp.ok) return await resp.text();
       } catch (e) { /* CORS or network error, try proxy */ }
-      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-      const resp = await fetch(proxyUrl);
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return await resp.text();
+      try {
+        const r1 = await fetch('https://corsproxy.io/?' + url);
+        if (r1.ok) return await r1.text();
+      } catch (e) { /* proxy failed */ }
+      const r2 = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
+      if (!r2.ok) throw new Error('HTTP ' + r2.status);
+      return await r2.text();
     }
 
     const [satText, jupText] = await Promise.all([fetchHorizons(satUrl), fetchHorizons(jupUrl)]);
@@ -1564,84 +1570,21 @@ async function refineEventTime(btn, moonIdx, eventType, ingress, predictedTime) 
 
     if (dataPoints.length < 3) throw new Error('Insufficient data');
 
-    // Find the crossing based on event type
+    // Find the limb crossing nearest to predictedTime (transit/occultation only)
     let refinedTime = null;
-
-    if (eventType === 'transit' || eventType === 'occultation') {
-      // Find when apparent distance from Jupiter center crosses jupAngRadius
-      // For transit/occultation, the key is the limb crossing
-      // Use |X| crossing jupAngRadius (since Y is small for these equatorial moons)
-      const threshold = jupAngRadius;
-      for (let i = 1; i < dataPoints.length; i++) {
-        const prev = dataPoints[i-1], curr = dataPoints[i];
-        const prevAbsX = Math.abs(prev.x), currAbsX = Math.abs(curr.x);
-        const prevD = prevAbsX - threshold, currD = currAbsX - threshold;
-        // Ingress: |X| decreasing through threshold; Egress: |X| increasing through threshold
-        if (prevD * currD < 0) {
-          const isMovingIn = currAbsX < prevAbsX;
-          if (isMovingIn === ingress) {
-            // Linear interpolation
-            const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
-            const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
-            refinedTime = new Date(tMs);
-            break;
-          }
-        }
-      }
-    } else if (eventType === 'shadow') {
-      // Shadow transit: the shadow position is offset from the moon by the phase angle
-      // Find when the shadow crosses the limb
-      // Shadow offset ≈ satellite X - (angular_semi_major_axis * sin(phase_angle))
-      // For a simpler approach: look for when the satellite X is near ±jupAngRadius
-      // but shifted by the shadow offset. Use a slightly larger/smaller threshold.
-      // The phase angle shifts shadows west; approximate shift from our model
-      const pos0 = galileanMoonPositions(predictedTime);
-      const shadowShiftJR = MOON_A[moonIdx] * Math.sin(pos0.phaseAngle) * 0.9;
-      const shadowShiftAS = shadowShiftJR * jupAngRadius; // convert to arcseconds approx
-
-      const threshold = jupAngRadius;
-      for (let i = 1; i < dataPoints.length; i++) {
-        const prev = dataPoints[i-1], curr = dataPoints[i];
-        // Shadow X ≈ satellite X - shadowShift (Horizons X is RA-positive=east, our shift is west-positive)
-        const prevShadowAbsX = Math.abs(prev.x + shadowShiftAS);
-        const currShadowAbsX = Math.abs(curr.x + shadowShiftAS);
-        const prevD = prevShadowAbsX - threshold, currD = currShadowAbsX - threshold;
-        if (prevD * currD < 0) {
-          const isMovingIn = currShadowAbsX < prevShadowAbsX;
-          if (isMovingIn === ingress) {
-            const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
-            const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
-            refinedTime = new Date(tMs);
-            break;
-          }
-        }
-      }
-    } else if (eventType === 'eclipse') {
-      // Eclipse: moon enters Jupiter's shadow cone behind the planet
-      // Look for when the moon disappears/reappears near the shadow edge
-      // Approximate: find when |X - shadowOffset| crosses jupAngRadius while moon is behind Jupiter
-      const pos0 = galileanMoonPositions(predictedTime);
-      const shadowShiftAS = MOON_A[moonIdx] * Math.sin(pos0.phaseAngle) * 0.9 * jupAngRadius;
-
-      const threshold = jupAngRadius;
-      for (let i = 1; i < dataPoints.length; i++) {
-        const prev = dataPoints[i-1], curr = dataPoints[i];
-        const prevSX = Math.abs(prev.x - shadowShiftAS);
-        const currSX = Math.abs(curr.x - shadowShiftAS);
-        const prevD = prevSX - threshold, currD = currSX - threshold;
-        if (prevD * currD < 0) {
-          const isMovingIn = currSX < prevSX;
-          if (isMovingIn === ingress) {
-            const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
-            const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
-            refinedTime = new Date(tMs);
-            break;
-          }
-        }
+    let bestDist = Infinity;
+    for (let i = 1; i < dataPoints.length; i++) {
+      const prev = dataPoints[i-1], curr = dataPoints[i];
+      const prevD = Math.abs(prev.x) - jupAngRadius, currD = Math.abs(curr.x) - jupAngRadius;
+      if (prevD * currD < 0) {
+        const frac = Math.abs(prevD) / (Math.abs(prevD) + Math.abs(currD));
+        const tMs = prev.time.getTime() + frac * (curr.time.getTime() - prev.time.getTime());
+        const dist = Math.abs(tMs - predictedTime.getTime());
+        if (dist < bestDist) { bestDist = dist; refinedTime = new Date(tMs); }
       }
     }
 
-    if (!refinedTime) throw new Error('Crossing not found');
+    if (!refinedTime) throw new Error('No limb crossing found in ±6h window');
 
     // Update the display
     const tz = document.getElementById('tzSelect').value;
